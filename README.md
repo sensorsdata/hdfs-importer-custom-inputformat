@@ -92,7 +92,7 @@ public class SaOrcInputFormat extends FileInputFormat<LongWritable, Text> {
 
    ```shell
    # 通过该环境变量设置 jar 包的位置
-   export CUSTOM_LIB_JARS='/home/sa_cluster/custom_lib/custom_processor.jar'
+   export CUSTOM_LIB_JARS='/home/sa_cluster/custom_lib/custom_inputformat-1.0-SNAPSHOT.jar'
    sh /home/sa_cluster/sa/tools/hdfs_importer/bin/hdfs_importer.sh \
    --path /data/your_input \
    --project your_project \
