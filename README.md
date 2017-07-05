@@ -15,7 +15,7 @@ https://www.sensorsdata.cn/manual/data_schema.html
     HDFS ==============================> 符合 Sensors Analytics 的数据格式定义的数据 => mapper
 ```
 
-一个例子，读取的文件格式 ORCFile，具体表结构和数据入下：
+一个例子，读取的文件格式 ORCFile，具体表结构和数据如下：
 
 ```shell
 CREATE EXTERNAL TABLE rawdata.event_table_example (
