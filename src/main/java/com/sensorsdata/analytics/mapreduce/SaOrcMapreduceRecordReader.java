@@ -140,28 +140,28 @@ public class SaOrcMapreduceRecordReader
     OrcStruct result = (OrcStruct) row;
     // 一条事件类型数据, 用于记录用户访问事件
     Map<String, Object> eventRecord = new HashMap<>();
+    // 设置数据类型： track 表示 event 事件 （必须）
     eventRecord.put("type", "track");
-    // 设置用户的唯一ID
+    // 设置用户的唯一ID（必须）
     String distinctId = result.getFieldValue(0).toString();
     eventRecord.put("distinct_id", distinctId);
-    // 设置事件的发生时间
+    // 设置事件的发生时间（必须）
     long time = ((OrcTimestamp)result.getFieldValue(1)).getTime();
     eventRecord.put("time", time);
-    // 设置事件的名称
+    // 设置事件的名称（必须）
     String eventName = result.getFieldValue(2).toString();
     eventRecord.put("event", eventName);
 
-    // 设置事件相关属性
+    // 设置事件相关属性（根据需要自定义）,下面为几个示例
     Map<String, Object> eventRecordProperties = new HashMap<>();
     eventRecord.put("properties", eventRecordProperties);
     // 设置 $ip, 可解析地理位置
     eventRecordProperties.put("$ip", result.getFieldValue(3).toString());
-    eventRecordProperties.put("$app_version",
-        result.getFieldValue(4).toString());
+    // 设置app版本 $app_version
+    eventRecordProperties.put("$app_version", result.getFieldValue(4).toString());
     // 设置 $user_agent, 可以自动解析
-    eventRecordProperties.put("$user_agent",
-        result.getFieldValue(5).toString());
-    // 设置其它属性
+    eventRecordProperties.put("$user_agent", result.getFieldValue(5).toString());
+    // 设置其它相关属性
 
     return new Text(objectMapper.writeValueAsString(eventRecord));
   }
