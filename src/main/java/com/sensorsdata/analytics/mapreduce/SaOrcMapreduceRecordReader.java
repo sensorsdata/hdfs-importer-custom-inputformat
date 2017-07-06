@@ -18,7 +18,6 @@
 package com.sensorsdata.analytics.mapreduce;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Joiner;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -31,8 +30,6 @@ import org.apache.orc.TypeDescription;
 import org.apache.orc.mapred.OrcMapredRecordReader;
 import org.apache.orc.mapred.OrcStruct;
 import org.apache.orc.mapred.OrcTimestamp;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -46,7 +43,6 @@ import java.util.Map;
  */
 public class SaOrcMapreduceRecordReader
     extends org.apache.hadoop.mapreduce.RecordReader<LongWritable, Text> {
-  private static final Logger logger = LoggerFactory.getLogger(SaOrcMapreduceRecordReader.class);
   private final TypeDescription schema;
   private final RecordReader batchReader;
   private final VectorizedRowBatch batch;
@@ -142,9 +138,6 @@ public class SaOrcMapreduceRecordReader
     }
 
     OrcStruct result = (OrcStruct) row;
-    TypeDescription typeDesc = result.getSchema();
-    logger.error("field names: {}", Joiner.on(",").join(typeDesc.getFieldNames()));
-
     // 一条事件类型数据, 用于记录用户访问事件
     Map<String, Object> eventRecord = new HashMap<>();
     eventRecord.put("type", "track");
