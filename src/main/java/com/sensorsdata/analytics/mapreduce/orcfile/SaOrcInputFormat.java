@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.sensorsdata.analytics.mapreduce;
+package com.sensorsdata.analytics.mapreduce.orcfile;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.io.sarg.SearchArgument;

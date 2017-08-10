@@ -84,7 +84,7 @@ public class SaOrcInputFormat extends FileInputFormat<LongWritable, Text> {
    sh /home/sa_cluster/sa/tools/hdfs_importer/bin/hdfs_importer.sh \
    --path /data/your_input \
    --project your_project \
-   --input_format com.sensorsdata.analytics.mapreduce.SaOrcInputFormat \ # 通过该参数指定 InputFormat 类名
+   --input_format com.sensorsdata.analytics.mapreduce.orcfile.SaOrcInputFormat \ # 通过该参数指定 InputFormat 类名
    --debug # 通过该参数开启 debug 模式,只会校验数据，不会真正的进行导入
    ```
 
@@ -96,7 +96,7 @@ public class SaOrcInputFormat extends FileInputFormat<LongWritable, Text> {
    sh /home/sa_cluster/sa/tools/hdfs_importer/bin/hdfs_importer.sh \
    --path /data/your_input \
    --project your_project \
-   --input_format com.sensorsdata.analytics.mapreduce.SaOrcInputFormat # 通过该参数指定 InputFormat 类名
+   --input_format com.sensorsdata.analytics.mapreduce.orcfile.SaOrcInputFormat # 通过该参数指定 InputFormat 类名
    ```
 
 ## 4. 其他

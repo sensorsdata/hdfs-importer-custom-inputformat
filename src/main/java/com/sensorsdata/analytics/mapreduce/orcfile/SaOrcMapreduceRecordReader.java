@@ -15,7 +15,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
  */
-package com.sensorsdata.analytics.mapreduce;
+package com.sensorsdata.analytics.mapreduce.orcfile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
