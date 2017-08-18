@@ -40,11 +40,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
 
 public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Text> {
-  private static final Logger logger = LoggerFactory.getLogger(SaRCFileMapReduceRecordReader.class);
+  private static final Logger logger =
+      LoggerFactory.getLogger(SaRCFileMapReduceRecordReader.class);
+  private static final FastDateFormat FULL_DATETIME_FORMAT =
+      FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.S");
 
   private Reader in;
   private long start;
@@ -149,19 +153,26 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
     // 设置数据类型： track 表示 event 事件 （必须）
     jsonRecord.put("type", this.saConfigParser.getType());
     // 设置用户的唯一ID（必须）
-    BytesRefWritable bytesRef =
-        row.get(this.saConfigParser.getDistinctIdMapping().getColumnIndex());
-    String distinctId = new String(bytesRef.getData(), bytesRef.getStart(), bytesRef.getLength());
+    String distinctId =
+        this.getRequiredColumn(row, this.saConfigParser.getDistinctIdMapping().getColumnIndex());
     jsonRecord.put("distinct_id", distinctId);
-    // 设置事件的发生时间（必须）
-    bytesRef = row.get(this.saConfigParser.getTimeMapping().getColumnIndex());
-    long time =
-        Long.parseLong(new String(bytesRef.getData(), bytesRef.getStart(), bytesRef.getLength()));
+    long time = System.currentTimeMillis();
+    // 只有 event 数据需要使用真实的时间，profile 可以使用发送时间
+    if (this.saConfigParser.getTimeMapping().getColumnIndex() >= 0) {
+      String eventTime =
+          this.getRequiredColumn(row, this.saConfigParser.getTimeMapping().getColumnIndex());
+      try {
+        time = FULL_DATETIME_FORMAT.parse(eventTime).getTime();
+      } catch (ParseException e) {
+        logger.error("failed to parse event time: {}", eventTime);
+        throw new IOException("failed to parse event time", e);
+      }
+    }
     jsonRecord.put("time", time);
     // 设置事件的名称（对于 track 事件必须）
     if (this.saConfigParser.getEventMapping() != null) {
-      bytesRef = row.get(this.saConfigParser.getEventMapping().getColumnIndex());
-      String eventName = new String(bytesRef.getData(), bytesRef.getStart(), bytesRef.getLength());
+      String eventName =
+          this.getRequiredColumn(row, this.saConfigParser.getEventMapping().getColumnIndex());
       jsonRecord.put("event", eventName);
     }
     if (this.saConfigParser.isTimeFree()) {
@@ -173,27 +184,44 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
     jsonRecord.put("properties", recordProperties);
     for(Map.Entry<String, SaDataMapping> entry :
         this.saConfigParser.getPropertiesMapping().entrySet()) {
-      recordProperties.put(entry.getKey(), this.mapValueToObject(row, entry.getValue()));
+      Object value = this.mapValueToObject(row, entry.getValue());
+      if (value != null) {
+        recordProperties.put(entry.getKey(), value);
+      }
     }
     return new Text(objectMapper.writeValueAsString(jsonRecord));
+  }
+
+  private String getRequiredColumn(BytesRefArrayWritable row, int index) throws IOException {
+    BytesRefWritable bytesRef = row.get(index);
+    String value = new String(bytesRef.getData(), bytesRef.getStart(), bytesRef.getLength());
+    if (value.equals("\\N")) {
+      logger.error("required column can not be null, index={}", index);
+      throw new IOException("column can not be null, index=" + index);
+    }
+    return value;
   }
 
   private Object mapValueToObject(BytesRefArrayWritable row, SaDataMapping saDataMapping)
       throws IOException {
     BytesRefWritable bytesRef = row.get(saDataMapping.getColumnIndex());
     String value = new String(bytesRef.getData(), bytesRef.getStart(), bytesRef.getLength());
+    if (value.equals("\\N")) { // NULL value
+      return null;
+    }
     switch (saDataMapping.getDataType()) {
       case BOOL:
         return Boolean.valueOf(value);
       case STRING:
         return value;
       case NUMBER:
-        return Long.parseLong(value);
+        return Double.parseDouble(value);
       case DATE:
-        return FastDateFormat.getInstance("yyyy-MM-dd").format(Long.parseLong(value));
+        return value;
       case DATETIME:
-        return FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(Long.parseLong(value));
+        return value;
       case LIST:
+        return value;
       default:
         logger.error("not supported data type: {}", saDataMapping.getDataType());
         throw new IOException("not supported data type now.");
