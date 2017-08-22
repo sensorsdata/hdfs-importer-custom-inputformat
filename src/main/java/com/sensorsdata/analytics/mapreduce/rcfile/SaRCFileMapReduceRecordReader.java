@@ -156,19 +156,19 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
     String distinctId =
         this.getRequiredColumn(row, this.saConfigParser.getDistinctIdMapping().getColumnIndex());
     jsonRecord.put("distinct_id", distinctId);
-    long time = System.currentTimeMillis();
     // 只有 event 数据需要使用真实的时间，profile 可以使用发送时间
     if (this.saConfigParser.getTimeMapping().getColumnIndex() >= 0) {
       String eventTime =
           this.getRequiredColumn(row, this.saConfigParser.getTimeMapping().getColumnIndex());
       try {
-        time = FULL_DATETIME_FORMAT.parse(eventTime).getTime();
+        long time = FULL_DATETIME_FORMAT.parse(eventTime).getTime();
+        jsonRecord.put("time", time);
       } catch (ParseException e) {
         logger.error("failed to parse event time: {}", eventTime);
-        throw new IOException("failed to parse event time", e);
       }
+    } else {
+      jsonRecord.put("time", System.currentTimeMillis());
     }
-    jsonRecord.put("time", time);
     // 设置事件的名称（对于 track 事件必须）
     if (this.saConfigParser.getEventMapping() != null) {
       String eventName =
@@ -195,9 +195,9 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
   private String getRequiredColumn(BytesRefArrayWritable row, int index) throws IOException {
     BytesRefWritable bytesRef = row.get(index);
     String value = new String(bytesRef.getData(), bytesRef.getStart(), bytesRef.getLength());
-    if (value.equals("\\N")) {
-      logger.error("required column can not be null, index={}", index);
-      throw new IOException("column can not be null, index=" + index);
+    if (value.isEmpty() || value.equals("\\N")) {
+      logger.error("required column can not be null, index={}, value={}", index, value);
+      return "";
     }
     return value;
   }
@@ -206,7 +206,7 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       throws IOException {
     BytesRefWritable bytesRef = row.get(saDataMapping.getColumnIndex());
     String value = new String(bytesRef.getData(), bytesRef.getStart(), bytesRef.getLength());
-    if (value.equals("\\N")) { // NULL value
+    if (value.isEmpty() || value.equals("\\N")) { // NULL value
       return null;
     }
     switch (saDataMapping.getDataType()) {
@@ -215,7 +215,12 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       case STRING:
         return value;
       case NUMBER:
-        return Double.parseDouble(value);
+        try {
+          return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+          logger.error("failed to parse double value", e);
+          return null;
+        }
       case DATE:
         return value;
       case DATETIME:
