@@ -23,6 +23,7 @@ import com.sensorsdata.analytics.mapreduce.common.SaDataMapping;
 import com.sensorsdata.analytics.mapreduce.exception.SaException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -215,10 +216,9 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       case STRING:
         return value;
       case NUMBER:
-        try {
+        if (StringUtils.isNumeric(value)) {
           return Double.parseDouble(value);
-        } catch (NumberFormatException e) {
-          logger.error("failed to parse double value", e);
+        } else {
           return null;
         }
       case DATE:
