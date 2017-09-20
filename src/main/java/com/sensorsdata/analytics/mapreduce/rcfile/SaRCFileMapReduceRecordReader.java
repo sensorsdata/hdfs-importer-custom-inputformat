@@ -42,7 +42,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Text> {
@@ -50,6 +54,8 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       LoggerFactory.getLogger(SaRCFileMapReduceRecordReader.class);
   private static final FastDateFormat FULL_DATETIME_FORMAT =
       FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.S");
+  private static final FastDateFormat DEFAULT_DAY_FORMAT =
+      FastDateFormat.getInstance("yyyy-MM-dd");
 
   private Reader in;
   private long start;
@@ -65,6 +71,17 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
 
   private SaConfigParser saConfigParser;
   private ObjectMapper objectMapper = new ObjectMapper();
+
+  private Date dayPartition;
+
+  SaRCFileMapReduceRecordReader(String dayPartition) throws InterruptedException {
+    try {
+      this.dayPartition = DEFAULT_DAY_FORMAT.parse(dayPartition);
+    } catch (ParseException e) {
+      logger.error("failed to parse day partition: {}", dayPartition);
+      throw new InterruptedException("failed to parse day partition");
+    }
+  }
 
   @Override
   public void close() throws IOException {
@@ -150,47 +167,87 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
 
   private Text mapRowToJsonData(BytesRefArrayWritable row) throws IOException {
     // event or profile 数据
-    Map<String, Object> jsonRecord = new HashMap<>();
+    Map<String, Object> record = new HashMap<>();
     // 设置数据类型： track 表示 event 事件 （必须）
-    jsonRecord.put("type", this.saConfigParser.getType());
+    record.put("type", this.saConfigParser.getType());
     // 设置用户的唯一ID（必须）
     String distinctId =
         this.getRequiredColumn(row, this.saConfigParser.getDistinctIdMapping().getColumnIndex());
-    jsonRecord.put("distinct_id", distinctId);
+    record.put("distinct_id", distinctId);
     // 只有 event 数据需要使用真实的时间，profile 可以使用发送时间
     if (this.saConfigParser.getTimeMapping().getColumnIndex() >= 0) {
       String eventTime =
           this.getRequiredColumn(row, this.saConfigParser.getTimeMapping().getColumnIndex());
       try {
-        long time = FULL_DATETIME_FORMAT.parse(eventTime).getTime();
-        jsonRecord.put("time", time);
+        Date baseTime = FULL_DATETIME_FORMAT.parse(eventTime);
+        long realTime = this.calculateRealTime(baseTime, this.dayPartition);
+        /*if (this.saConfigParser.getDayMapping() != null) {
+          String dayStr =
+              this.getRequiredColumn(row, this.saConfigParser.getDayMapping().getColumnIndex());
+          realTime = this.calculateRealTime(baseTime, DEFAULT_DAY_FORMAT.parse(dayStr));
+        } else {
+          realTime = baseTime.getTime();
+        }*/
+        record.put("time", realTime);
       } catch (ParseException e) {
         logger.error("failed to parse event time: {}", eventTime);
       }
     } else {
-      jsonRecord.put("time", System.currentTimeMillis());
+      record.put("time", System.currentTimeMillis());
     }
     // 设置事件的名称（对于 track 事件必须）
     if (this.saConfigParser.getEventMapping() != null) {
       String eventName =
           this.getRequiredColumn(row, this.saConfigParser.getEventMapping().getColumnIndex());
-      jsonRecord.put("event", eventName);
+      record.put("event", eventName);
     }
     if (this.saConfigParser.isTimeFree()) {
-      jsonRecord.put("time_free", true);
+      record.put("time_free", true);
     }
 
     // 设置事件相关属性（根据需要自定义
     Map<String, Object> recordProperties = new HashMap<>();
-    jsonRecord.put("properties", recordProperties);
+    Map<String, Object> unsetProperties = new HashMap<>();
+    record.put("properties", recordProperties);
     for(Map.Entry<String, SaDataMapping> entry :
         this.saConfigParser.getPropertiesMapping().entrySet()) {
       Object value = this.mapValueToObject(row, entry.getValue());
       if (value != null) {
         recordProperties.put(entry.getKey(), value);
+      } else {
+        unsetProperties.put(entry.getKey(), true);
       }
     }
-    return new Text(objectMapper.writeValueAsString(jsonRecord));
+
+    // 一次可以返回多条数据（可以是事件和用户属性）
+    List<Map<String, Object>> records = new ArrayList<>();
+
+    // 对于profile 产生 profile_set 和 profile_unset 两条
+    // 对于 profile_set 会同时生成一条 profile_unset, 将所有的属性设置为空
+    if (this.saConfigParser.getType().equals("profile_set")) {
+      Map<String, Object> unsetRecord = new HashMap<>();
+      unsetRecord.put("type", "profile_unset");
+      unsetRecord.put("distinct_id", distinctId);
+      unsetRecord.put("properties", unsetProperties);
+      records.add(unsetRecord);
+    }
+
+    records.add(record);
+    return new Text(objectMapper.writeValueAsString(records));
+  }
+
+  private long calculateRealTime(Date baseTime, Date dayTime) {
+    Calendar baseCalendar = Calendar.getInstance();
+    baseCalendar.setTime(baseTime);
+
+    Calendar dayCalendar = Calendar.getInstance();
+    dayCalendar.setTime(dayTime);
+
+    baseCalendar.set(Calendar.YEAR, dayCalendar.get(Calendar.YEAR));
+    baseCalendar.set(Calendar.MONTH, dayCalendar.get(Calendar.MONTH));
+    baseCalendar.set(Calendar.DATE, dayCalendar.get(Calendar.DATE));
+
+    return baseCalendar.getTimeInMillis();
   }
 
   private String getRequiredColumn(BytesRefArrayWritable row, int index) throws IOException {
