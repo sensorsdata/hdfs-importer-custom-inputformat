@@ -24,6 +24,9 @@ public class SaConfigParser {
   private SaDataMapping distinctIdMapping;
   private SaDataMapping timeMapping;
 
+  // 【可选】单独设置day，如果
+  private SaDataMapping dayMapping;
+
   // Event 必须字段
   private SaDataMapping eventMapping;
   // 是否限制 event 数据时间
@@ -44,6 +47,10 @@ public class SaConfigParser {
             parseRequiredMapping("event", DataType.STRING, properties);
         saConfigParser.timeFree =
             Boolean.parseBoolean(properties.getProperty("time_free", "False"));
+        String dayStr = properties.getProperty("day");
+        if (dayStr != null) {
+          saConfigParser.dayMapping = parseRequiredMapping("day", DataType.DATE, properties);
+        }
       case "profile_set":
         saConfigParser.type = type;
         saConfigParser.distinctIdMapping =
@@ -95,6 +102,10 @@ public class SaConfigParser {
 
   public boolean isTimeFree() {
     return timeFree;
+  }
+
+  public SaDataMapping getDayMapping() {
+    return dayMapping;
   }
 
   public Map<String, SaDataMapping> getPropertiesMapping() {
