@@ -193,7 +193,7 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
         logger.error("failed to parse event time: {}", eventTime);
       }
     } else {
-      record.put("time", System.currentTimeMillis());
+      record.put("time", 0);
     }
     // 设置事件的名称（对于 track 事件必须）
     if (this.saConfigParser.getEventMapping() != null) {
@@ -273,9 +273,9 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       case STRING:
         return value;
       case NUMBER:
-        if (StringUtils.isNumeric(value)) {
+        try {
           return Double.parseDouble(value);
-        } else {
+        } catch (Exception e) {
           return null;
         }
       case DATE:
