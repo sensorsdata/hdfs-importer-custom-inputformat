@@ -190,6 +190,7 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
         }*/
         record.put("time", realTime);
       } catch (ParseException e) {
+        record.put("time", 0);
         logger.error("failed to parse event time: {}", eventTime);
       }
     } else {
