@@ -23,7 +23,6 @@ import com.sensorsdata.analytics.mapreduce.common.SaDataMapping;
 import com.sensorsdata.analytics.mapreduce.exception.SaException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -42,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -54,6 +54,8 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       LoggerFactory.getLogger(SaRCFileMapReduceRecordReader.class);
   private static final FastDateFormat FULL_DATETIME_FORMAT =
       FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.S");
+  private static final FastDateFormat DEFAULT_DATETIME_FORMAT =
+      FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss");
   private static final FastDateFormat DEFAULT_DAY_FORMAT =
       FastDateFormat.getInstance("yyyy-MM-dd");
 
@@ -73,15 +75,6 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
   private ObjectMapper objectMapper = new ObjectMapper();
 
   private Date dayPartition;
-
-  SaRCFileMapReduceRecordReader(String dayPartition) throws InterruptedException {
-    try {
-      this.dayPartition = DEFAULT_DAY_FORMAT.parse(dayPartition);
-    } catch (ParseException e) {
-      logger.error("failed to parse day partition: {}", dayPartition);
-      throw new InterruptedException("failed to parse day partition");
-    }
-  }
 
   @Override
   public void close() throws IOException {
@@ -163,7 +156,33 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       logger.error("failed to parse data mapping config", e);
       throw new IOException("failed to parse config", e);
     }
+
+    this.dayPartition = this.parsePartitionDay(split);
   }
+
+  private Date parsePartitionDay(InputSplit inputSplit) throws IOException {
+    if (!saConfigParser.isSpecialTime()) {
+      return null;
+    }
+
+    String filePathString = ((FileSplit) inputSplit).getPath().toString();
+    String partitionStr = new Path(filePathString).getParent().getName();
+    String dayPartitionStr = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+    if (partitionStr.contains("=")) {
+      dayPartitionStr =  partitionStr.split("=")[1];
+    }
+
+    Date dayDate;
+    try {
+      dayDate = DEFAULT_DAY_FORMAT.parse(dayPartitionStr);
+    } catch (ParseException e) {
+      logger.error("failed to parse day partition: {}", dayPartitionStr);
+      throw new IOException("failed to parse day partition");
+    }
+    return dayDate;
+  }
+
+
 
   private Text mapRowToJsonData(BytesRefArrayWritable row) throws IOException {
     // event or profile 数据
@@ -179,15 +198,15 @@ public class SaRCFileMapReduceRecordReader extends RecordReader<LongWritable, Te
       String eventTime =
           this.getRequiredColumn(row, this.saConfigParser.getTimeMapping().getColumnIndex());
       try {
-        Date baseTime = FULL_DATETIME_FORMAT.parse(eventTime);
-        long realTime = this.calculateRealTime(baseTime, this.dayPartition);
-        /*if (this.saConfigParser.getDayMapping() != null) {
-          String dayStr =
-              this.getRequiredColumn(row, this.saConfigParser.getDayMapping().getColumnIndex());
-          realTime = this.calculateRealTime(baseTime, DEFAULT_DAY_FORMAT.parse(dayStr));
+        // long realTime = this.calculateRealTime(baseTime, this.dayPartition);
+        long realTime;
+        if (this.dayPartition != null) {
+          Date baseTime = FULL_DATETIME_FORMAT.parse(eventTime);
+          realTime = this.calculateRealTime(baseTime, this.dayPartition);
         } else {
-          realTime = baseTime.getTime();
-        }*/
+          realTime = DEFAULT_DATETIME_FORMAT.parse(eventTime).getTime();
+        }
+
         record.put("time", realTime);
       } catch (ParseException e) {
         record.put("time", 0);

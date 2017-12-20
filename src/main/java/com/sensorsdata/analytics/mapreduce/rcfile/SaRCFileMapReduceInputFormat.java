@@ -18,7 +18,6 @@
  */
 package com.sensorsdata.analytics.mapreduce.rcfile;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.InputSplit;
@@ -26,11 +25,8 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 
 public class SaRCFileMapReduceInputFormat extends FileInputFormat<LongWritable, Text> {
@@ -40,21 +36,8 @@ public class SaRCFileMapReduceInputFormat extends FileInputFormat<LongWritable, 
                                         TaskAttemptContext context)
       throws IOException, InterruptedException {
     context.setStatus(split.toString());
-    return new SaRCFileMapReduceRecordReader(parsePartitionDay(split));
+    return new SaRCFileMapReduceRecordReader();
   }
-
-  private String parsePartitionDay(InputSplit inputSplit) {
-    String filePathString = ((FileSplit) inputSplit).getPath().toString();
-    String partitionStr = new Path(filePathString).getParent().getName();
-    String defaultPartitionStr = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
-    if (partitionStr.contains("=")) {
-      return partitionStr.split("=")[1];
-    } else {
-      return defaultPartitionStr;
-    }
-  }
-
-
 
   @Override
   public List<InputSplit> getSplits(JobContext job) throws IOException {
